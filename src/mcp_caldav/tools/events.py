@@ -88,8 +88,32 @@ def register_event_tools(
         name="caldav_create_event",
         description="Create an event in a specific account_id and calendar_id.",
     )
-    def create_event(**kwargs: object) -> dict[str, object]:
-        payload = CreateEventInput.model_validate(kwargs)
+    def create_event(
+        account_id: str,
+        calendar_id: str,
+        title: str,
+        start_time: str,
+        end_time: str | None = None,
+        duration_hours: float | None = None,
+        description: str | None = None,
+        location: str | None = None,
+        categories: list[str] | None = None,
+        priority: int | None = None,
+        event_uid: str | None = None,
+    ) -> dict[str, object]:
+        payload = CreateEventInput(
+            account_id=account_id,
+            calendar_id=calendar_id,
+            title=title,
+            start_time=start_time,
+            end_time=end_time,
+            duration_hours=duration_hours,
+            description=description,
+            location=location,
+            categories=categories,
+            priority=priority,
+            event_uid=event_uid,
+        )
         registry.get_account(payload.account_id)
         access.ensure_calendar_access(payload.account_id, payload.calendar_id)
         provider = sessions.get_provider(payload.account_id)
@@ -105,8 +129,32 @@ def register_event_tools(
         name="caldav_update_event",
         description="Update an existing event identified by account_id, calendar_id and event_uid.",
     )
-    def update_event(**kwargs: object) -> dict[str, object]:
-        payload = UpdateEventInput.model_validate(kwargs)
+    def update_event(
+        account_id: str,
+        calendar_id: str,
+        event_uid: str,
+        title: str | None = None,
+        start_time: str | None = None,
+        end_time: str | None = None,
+        duration_hours: float | None = None,
+        description: str | None = None,
+        location: str | None = None,
+        categories: list[str] | None = None,
+        priority: int | None = None,
+    ) -> dict[str, object]:
+        payload = UpdateEventInput(
+            account_id=account_id,
+            calendar_id=calendar_id,
+            event_uid=event_uid,
+            title=title,
+            start_time=start_time,
+            end_time=end_time,
+            duration_hours=duration_hours,
+            description=description,
+            location=location,
+            categories=categories,
+            priority=priority,
+        )
         registry.get_account(payload.account_id)
         access.ensure_calendar_access(payload.account_id, payload.calendar_id)
         provider = sessions.get_provider(payload.account_id)

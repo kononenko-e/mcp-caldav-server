@@ -160,8 +160,16 @@ class CaldavProvider(CalendarProvider):
 
     def delete_event(self, calendar_id: str, event_uid: str) -> None:
         remote_calendar = self._resolve_calendar(calendar_id)
-        event = self._get_event(remote_calendar.remote, event_uid)
-        event.delete()
+        # Build the direct URL to the event .ics file
+        # iCloud CalDAV URL: <calendar_url>/<event_uid>.ics
+        url = remote_calendar.summary.url.rstrip("/") + f"/{event_uid}.ics"
+        client = self._client_instance()
+        response = client.request(url, "DELETE")
+        if response.status not in (200, 204, 404):
+            raise ProviderConnectionError(
+                f"failed to delete event '{event_uid}' from calendar '{calendar_id}': "
+                f"{response.status} {response.reason}"
+            )
 
     def search_events(
         self,
