@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
-from typing import cast
+from typing import Any, cast
 from uuid import uuid4
 
 from caldav import DAVClient

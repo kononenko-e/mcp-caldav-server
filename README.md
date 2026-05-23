@@ -9,6 +9,8 @@ MCP server for multi-account CalDAV access with explicit `account_id` and `calen
 - Cached provider sessions with explicit reconnect support.
 - Stable calendar selection by `calendar_id`.
 - Predictable JSON responses for LLM agents.
+- Optional shared HTTP mode for multiple concurrent agents.
+- Optional bearer-token access profiles to isolate visible accounts/calendars per agent.
 - Clear separation between config, core, provider and MCP tool layers.
 
 ## Requirements
@@ -53,6 +55,43 @@ Configuration rules:
 - If `calendars` is omitted, calendars are auto-discovered lazily.
 - `default_calendar_id` is optional and affects only response metadata.
 
+Optional shared HTTP section:
+
+```yaml
+http:
+  host: 127.0.0.1
+  port: 8787
+  streamable_http_path: /mcp
+  stateless_http: false
+  public_base_url: http://127.0.0.1:8787
+```
+
+Optional per-agent visibility rules for shared HTTP mode:
+
+```yaml
+access:
+  tokens:
+    hermes_main:
+      client_id: hermes-main
+      token_env: HERMES_MAIN_MCP_TOKEN
+      allowed_accounts: [work]
+
+    claude_personal:
+      client_id: claude-personal
+      token_env: CLAUDE_PERSONAL_MCP_TOKEN
+      allowed_calendars:
+        personal: [home]
+```
+
+Access semantics:
+
+- If `access.tokens` is omitted, HTTP mode is open and every client sees all configured accounts.
+- If `access.tokens` is present, HTTP requests must use `Authorization: Bearer <token>`.
+- Each token is mapped to one `client_id`.
+- `allowed_accounts` grants full access to those accounts.
+- `allowed_calendars` grants access only to specific calendars in those accounts.
+- If both `allowed_accounts` and `allowed_calendars` are omitted for a token, that token has full access.
+
 ## Run
 
 ```bash
@@ -65,6 +104,14 @@ Transport options:
 uv run mcp-caldav-server --config config/caldav.yaml --transport stdio
 uv run mcp-caldav-server --config config/caldav.yaml --transport sse
 uv run mcp-caldav-server --config config/caldav.yaml --transport streamable-http
+uv run mcp-caldav-server --config config/caldav.yaml --transport streamable-http --host 127.0.0.1 --port 8787
+```
+
+Shared HTTP checks:
+
+```bash
+curl http://127.0.0.1:8787/health
+curl -H "Authorization: Bearer $HERMES_MAIN_MCP_TOKEN" http://127.0.0.1:8787/mcp
 ```
 
 ## Tools
@@ -103,6 +150,48 @@ Example server config fragment:
   }
 }
 ```
+
+Shared HTTP example:
+
+```json
+{
+  "mcpServers": {
+    "caldav-shared": {
+      "transport": "streamable-http",
+      "url": "http://127.0.0.1:8787/mcp",
+      "headers": {
+        "Authorization": "Bearer ${HERMES_MAIN_MCP_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+## Agent setup
+
+`Codex`, `Claude`, `Hermes` and similar clients are easiest to support in two modes:
+
+1. `stdio` mode:
+   one agent process starts its own MCP server process.
+2. `streamable-http` mode:
+   many agents share one long-lived MCP server instance on the same machine.
+
+Use `stdio` when:
+
+- the client does not support MCP-over-HTTP;
+- the client does not support custom bearer headers;
+- you want strict process isolation.
+
+Use shared HTTP when:
+
+- several agent instances should reuse one MCP server;
+- you want one connection pool and one config file;
+- you want token-based visibility per agent.
+
+For `Hermes`, this is the important part:
+
+- if Hermes can connect to MCP via `streamable-http` and send `Authorization` headers, one shared server is enough;
+- if Hermes only supports `command`-style MCP, run it in `stdio` mode instead.
 
 ## Development
 

@@ -3,8 +3,16 @@ from __future__ import annotations
 from collections.abc import Callable
 
 import pytest
+from mcp.server.auth.provider import AccessToken
 
-from mcp_caldav.config.models import AccountConfig, CalendarConfig, ServerConfig
+from mcp_caldav.config.models import (
+    AccessConfig,
+    AccessProfileConfig,
+    AccountConfig,
+    CalendarConfig,
+    ServerConfig,
+)
+from mcp_caldav.core.access import AccessController
 from mcp_caldav.core.errors import AccountNotFoundError, CalendarNotFoundError
 from mcp_caldav.core.registry import AccountRegistry
 from mcp_caldav.core.session import SessionManager
@@ -91,10 +99,51 @@ def server_tools() -> tuple[dict[str, Callable[..., dict[str, object]]], Account
         )
     )
     sessions = SessionManager(registry=registry, factory=lambda account_id, account: FakeProvider())
-    server = build_server(registry=registry, sessions=sessions)
+    access = AccessController(None)
+    server = build_server(registry=registry, sessions=sessions, access=access)
     manager = server._tool_manager  # noqa: SLF001
     tools = {tool.name: tool.fn for tool in manager.list_tools()}
     return tools, registry
+
+
+@pytest.fixture
+def scoped_server_tools(
+    monkeypatch: pytest.MonkeyPatch,
+) -> dict[str, Callable[..., dict[str, object]]]:
+    registry = AccountRegistry(
+        ServerConfig(
+            accounts={
+                "work": AccountConfig(
+                    url="https://caldav.example.com/",
+                    username="alice@example.com",
+                    password="secret",
+                    calendars=[CalendarConfig(calendar_id="main", name="Work")],
+                ),
+                "personal": AccountConfig(
+                    url="https://caldav.icloud.com/",
+                    username="alice@icloud.com",
+                    password="secret",
+                    calendars=[CalendarConfig(calendar_id="home", name="Home")],
+                ),
+            },
+            access=AccessConfig(
+                tokens={
+                    "hermes": AccessProfileConfig(
+                        client_id="hermes",
+                        token="secret",
+                        allowed_calendars={"work": ["main"]},
+                    )
+                }
+            ),
+        )
+    )
+    sessions = SessionManager(registry=registry, factory=lambda account_id, account: FakeProvider())
+    access = AccessController(registry.config.access)
+    server = build_server(registry=registry, sessions=sessions, access=access)
+    manager = server._tool_manager  # noqa: SLF001
+    token = AccessToken(token="secret", client_id="hermes", scopes=["caldav"])
+    monkeypatch.setattr("mcp_caldav.core.access.get_access_token", lambda: token)
+    return {tool.name: tool.fn for tool in manager.list_tools()}
 
 
 def test_list_accounts_tool(
@@ -149,3 +198,18 @@ def test_unknown_calendar_error(
 
     with pytest.raises(CalendarNotFoundError):
         tools["caldav_get_calendar"](account_id="work", calendar_id="missing")
+
+
+def test_scoped_access_hides_other_accounts(
+    scoped_server_tools: dict[str, Callable[..., dict[str, object]]],
+) -> None:
+    result = scoped_server_tools["caldav_list_accounts"]()
+
+    assert [account["account_id"] for account in result["accounts"]] == ["work"]
+
+
+def test_scoped_access_blocks_other_account_calendar(
+    scoped_server_tools: dict[str, Callable[..., dict[str, object]]],
+) -> None:
+    with pytest.raises(AccountNotFoundError):
+        scoped_server_tools["caldav_list_calendars"](account_id="personal")

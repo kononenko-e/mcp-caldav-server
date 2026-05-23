@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
 
+from mcp_caldav.core.access import AccessController
 from mcp_caldav.core.registry import AccountRegistry
 from mcp_caldav.core.session import SessionManager
 from mcp_caldav.schemas.tools import (
@@ -16,6 +17,7 @@ def register_calendar_tools(
     server: FastMCP,
     registry: AccountRegistry,
     sessions: SessionManager,
+    access: AccessController,
 ) -> None:
     @server.tool(
         name="caldav_list_calendars",
@@ -24,8 +26,9 @@ def register_calendar_tools(
     def list_calendars(account_id: str) -> dict[str, object]:
         payload = ListCalendarsInput(account_id=account_id)
         registry.get_account(payload.account_id)
+        access.ensure_account_access(payload.account_id)
         provider = sessions.get_provider(payload.account_id)
-        calendars = provider.list_calendars()
+        calendars = access.filter_calendars(payload.account_id, provider.list_calendars())
         response = ListCalendarsResponse(account_id=payload.account_id, calendars=calendars)
         return response.model_dump(mode="json")
 
@@ -36,6 +39,7 @@ def register_calendar_tools(
     def get_calendar(account_id: str, calendar_id: str) -> dict[str, object]:
         payload = GetCalendarInput(account_id=account_id, calendar_id=calendar_id)
         registry.get_account(payload.account_id)
+        access.ensure_calendar_access(payload.account_id, payload.calendar_id)
         provider = sessions.get_provider(payload.account_id)
         calendar = provider.get_calendar(payload.calendar_id)
         response = GetCalendarResponse(account_id=payload.account_id, calendar=calendar)

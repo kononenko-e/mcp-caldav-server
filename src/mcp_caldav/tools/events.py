@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
 
+from mcp_caldav.core.access import AccessController
 from mcp_caldav.core.registry import AccountRegistry
 from mcp_caldav.core.session import SessionManager
 from mcp_caldav.schemas.tools import (
@@ -23,6 +24,7 @@ def register_event_tools(
     server: FastMCP,
     registry: AccountRegistry,
     sessions: SessionManager,
+    access: AccessController,
 ) -> None:
     @server.tool(
         name="caldav_list_events",
@@ -36,6 +38,7 @@ def register_event_tools(
             end=end,
         )
         registry.get_account(payload.account_id)
+        access.ensure_calendar_access(payload.account_id, payload.calendar_id)
         provider = sessions.get_provider(payload.account_id)
         events = provider.list_events(payload.calendar_id, payload.start, payload.end)
         response = ListEventsResponse(
@@ -53,6 +56,7 @@ def register_event_tools(
         payload = GetTodayEventsInput(account_id=account_id, calendar_id=calendar_id)
         start, end = today_window()
         registry.get_account(payload.account_id)
+        access.ensure_calendar_access(payload.account_id, payload.calendar_id)
         provider = sessions.get_provider(payload.account_id)
         events = provider.list_events(payload.calendar_id, start, end)
         response = ListEventsResponse(
@@ -70,6 +74,7 @@ def register_event_tools(
         payload = GetWeekEventsInput(account_id=account_id, calendar_id=calendar_id)
         start, end = week_window()
         registry.get_account(payload.account_id)
+        access.ensure_calendar_access(payload.account_id, payload.calendar_id)
         provider = sessions.get_provider(payload.account_id)
         events = provider.list_events(payload.calendar_id, start, end)
         response = ListEventsResponse(
@@ -86,6 +91,7 @@ def register_event_tools(
     def create_event(**kwargs: object) -> dict[str, object]:
         payload = CreateEventInput.model_validate(kwargs)
         registry.get_account(payload.account_id)
+        access.ensure_calendar_access(payload.account_id, payload.calendar_id)
         provider = sessions.get_provider(payload.account_id)
         event = provider.create_event(payload)
         response = CreateEventResponse(
@@ -102,6 +108,7 @@ def register_event_tools(
     def update_event(**kwargs: object) -> dict[str, object]:
         payload = UpdateEventInput.model_validate(kwargs)
         registry.get_account(payload.account_id)
+        access.ensure_calendar_access(payload.account_id, payload.calendar_id)
         provider = sessions.get_provider(payload.account_id)
         event = provider.update_event(payload)
         response = UpdateEventResponse(
@@ -123,6 +130,7 @@ def register_event_tools(
             event_uid=event_uid,
         )
         registry.get_account(payload.account_id)
+        access.ensure_calendar_access(payload.account_id, payload.calendar_id)
         provider = sessions.get_provider(payload.account_id)
         provider.delete_event(payload.calendar_id, payload.event_uid)
         response = DeleteEventResponse(

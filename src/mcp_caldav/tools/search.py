@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
 
+from mcp_caldav.core.access import AccessController
 from mcp_caldav.core.registry import AccountRegistry
 from mcp_caldav.core.session import SessionManager
 from mcp_caldav.schemas.tools import SearchEventsInput, SearchEventsResponse
@@ -11,6 +12,7 @@ def register_search_tools(
     server: FastMCP,
     registry: AccountRegistry,
     sessions: SessionManager,
+    access: AccessController,
 ) -> None:
     @server.tool(
         name="caldav_search_events",
@@ -31,6 +33,7 @@ def register_search_tools(
             end=end,
         )
         registry.get_account(payload.account_id)
+        access.ensure_calendar_access(payload.account_id, payload.calendar_id)
         provider = sessions.get_provider(payload.account_id)
         events = provider.search_events(
             calendar_id=payload.calendar_id,

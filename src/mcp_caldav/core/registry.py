@@ -9,6 +9,10 @@ class AccountRegistry:
     def __init__(self, config: ServerConfig) -> None:
         self._config = config
 
+    @property
+    def config(self) -> ServerConfig:
+        return self._config
+
     def list_accounts(self) -> list[AccountSummary]:
         accounts: list[AccountSummary] = []
         for account_id, account in self._config.accounts.items():
