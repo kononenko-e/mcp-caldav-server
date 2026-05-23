@@ -1,0 +1,52 @@
+[project]
+name = "mcp-caldav-server"
+version = "0.1.0"
+description = "Multi-account MCP server for CalDAV calendars"
+readme = "README.md"
+authors = [
+    { name = "Evgenij Kononenko", email = "kononenko-e@mail.ru" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "caldav>=3.2.0",
+    "click>=8.4.1",
+    "icalendar>=7.1.2",
+    "mcp>=1.27.1",
+    "pydantic>=2.13.4",
+    "python-dotenv>=1.2.2",
+    "pyyaml>=6.0.3",
+]
+
+[project.scripts]
+mcp-caldav-server = "mcp_caldav.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.11.14,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "mypy>=2.1.0",
+    "pytest>=9.0.3",
+    "ruff>=0.15.14",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["mcp_caldav"]
+strict = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["mcp_caldav.providers.caldav"]
+disable_error_code = ["no-untyped-call", "no-any-return", "attr-defined", "valid-type", "unreachable", "operator"]
