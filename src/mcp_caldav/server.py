@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from pydantic import AnyHttpUrl, TypeAdapter
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP
+from pydantic import AnyHttpUrl, TypeAdapter
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 

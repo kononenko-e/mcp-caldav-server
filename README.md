@@ -11,6 +11,7 @@ MCP server for multi-account CalDAV access with explicit `account_id` and `calen
 - Predictable JSON responses for LLM agents.
 - Optional shared HTTP mode for multiple concurrent agents.
 - Optional bearer-token access profiles to isolate visible accounts/calendars per agent.
+- Runtime-safe CalDAV backend selection for environments where `niquests` and HTTP/3 are problematic.
 - Clear separation between config, core, provider and MCP tool layers.
 
 ## Requirements
@@ -91,6 +92,21 @@ Access semantics:
 - `allowed_accounts` grants full access to those accounts.
 - `allowed_calendars` grants access only to specific calendars in those accounts.
 - If both `allowed_accounts` and `allowed_calendars` are omitted for a token, that token has full access.
+
+Optional provider compatibility section:
+
+```yaml
+provider:
+  http_backend: requests
+  disable_http3: true
+```
+
+Provider compatibility rules:
+
+- Default is `http_backend: requests`.
+- This avoids the `niquests` runtime path by default.
+- `http_backend: niquests` is still available if you explicitly need it.
+- When `niquests` is used, `disable_http3: true` is applied by default to avoid HTTP/3 kernel issues.
 
 ## Run
 
@@ -192,6 +208,14 @@ For `Hermes`, this is the important part:
 
 - if Hermes can connect to MCP via `streamable-http` and send `Authorization` headers, one shared server is enough;
 - if Hermes only supports `command`-style MCP, run it in `stdio` mode instead.
+
+For environments where Hermes reports `HTTP/3`, `urllib3-future`, `qh3`, or `niquests` issues, keep this:
+
+```yaml
+provider:
+  http_backend: requests
+  disable_http3: true
+```
 
 ## Development
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
@@ -76,9 +78,17 @@ class AccessConfig(BaseModel):
     tokens: dict[str, AccessProfileConfig] = Field(default_factory=dict)
 
 
+class ProviderConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    http_backend: Literal["requests", "niquests"] = "requests"
+    disable_http3: bool = True
+
+
 class ServerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     accounts: dict[str, AccountConfig] = Field(min_length=1)
     http: HttpConfig = Field(default_factory=HttpConfig)
     access: AccessConfig | None = None
+    provider: ProviderConfig = Field(default_factory=ProviderConfig)

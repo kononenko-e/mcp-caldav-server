@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from types import ModuleType
+
 from mcp_caldav.config.models import AccountConfig, CalendarConfig
 from mcp_caldav.providers.caldav import CaldavProvider
+from mcp_caldav.providers.compat import CaldavBindings
 
 
 class FakeRemoteCalendar:
@@ -20,7 +23,12 @@ class FakePrincipal:
 
 class ProviderUnderTest(CaldavProvider):
     def __init__(self, account_id: str, account: AccountConfig, principal: FakePrincipal) -> None:
-        super().__init__(account_id=account_id, account=account)
+        bindings = CaldavBindings(
+            davclient_module=ModuleType("davclient"),
+            collection_module=ModuleType("collection"),
+            calendarobjectresource_module=ModuleType("calendarobjectresource"),
+        )
+        super().__init__(account_id=account_id, account=account, bindings=bindings)
         self._fake_principal = principal
 
     def _principal_client(self):

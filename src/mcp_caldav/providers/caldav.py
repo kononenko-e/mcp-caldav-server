@@ -4,12 +4,9 @@ from dataclasses import dataclass
 from typing import Any, cast
 from uuid import uuid4
 
-from caldav import DAVClient
-from caldav.calendarobjectresource import Event as CaldavEvent
-from caldav.collection import Calendar as CaldavCalendar
 from icalendar import Alarm, Calendar, Event, vCalAddress, vCategory
 
-from mcp_caldav.config.models import AccountConfig, CalendarConfig
+from mcp_caldav.config.models import AccountConfig, CalendarConfig, ProviderConfig
 from mcp_caldav.core.errors import (
     CalendarNotFoundError,
     EventNotFoundError,
@@ -17,6 +14,7 @@ from mcp_caldav.core.errors import (
 )
 from mcp_caldav.core.ids import stable_calendar_id
 from mcp_caldav.providers.base import CalendarProvider
+from mcp_caldav.providers.compat import CaldavBindings, load_caldav_bindings
 from mcp_caldav.schemas.common import CalendarSummary, EventRecord
 from mcp_caldav.schemas.tools import CreateEventInput, ReminderInput, UpdateEventInput
 from mcp_caldav.utils.ical import first_component, serialize_recurrence
@@ -26,18 +24,33 @@ from mcp_caldav.utils.time import ensure_datetime, format_datetime
 @dataclass(frozen=True)
 class ResolvedCalendar:
     summary: CalendarSummary
-    remote: CaldavCalendar
+    remote: Any
 
 
 class CaldavProviderFactory:
+    def __init__(self, provider_config: ProviderConfig) -> None:
+        self._provider_config = provider_config
+        self._bindings: CaldavBindings | None = None
+
     def __call__(self, account_id: str, account: AccountConfig) -> CaldavProvider:
-        return CaldavProvider(account_id=account_id, account=account)
+        if self._bindings is None:
+            self._bindings = load_caldav_bindings(
+                http_backend=self._provider_config.http_backend,
+                disable_http3=self._provider_config.disable_http3,
+            )
+        return CaldavProvider(account_id=account_id, account=account, bindings=self._bindings)
 
 
 class CaldavProvider(CalendarProvider):
-    def __init__(self, account_id: str, account: AccountConfig) -> None:
+    def __init__(
+        self,
+        account_id: str,
+        account: AccountConfig,
+        bindings: CaldavBindings,
+    ) -> None:
         self._account_id = account_id
         self._account = account
+        self._bindings = bindings
         self._client: Any = None
         self._principal: Any = None
         self._calendar_cache: dict[str, ResolvedCalendar] | None = None
@@ -51,7 +64,7 @@ class CaldavProvider(CalendarProvider):
     def list_events(self, calendar_id: str, start: str, end: str) -> list[EventRecord]:
         remote_calendar = self._resolve_calendar(calendar_id)
         results = cast(
-            list[CaldavEvent],
+            list[Any],
             remote_calendar.remote.date_search(
                 start=ensure_datetime(start),
                 end=ensure_datetime(end),
@@ -99,7 +112,7 @@ class CaldavProvider(CalendarProvider):
             cal_alarm = self._build_alarm(reminder)
             event.add_component(cal_alarm)
 
-        remote_event = cast(CaldavEvent, remote_calendar.remote.save_event(cal.to_ical()))
+        remote_event = cast(Any, remote_calendar.remote.save_event(cal.to_ical()))
         return self._event_to_record(remote_calendar.summary, remote_event)
 
     def update_event(self, payload: UpdateEventInput) -> EventRecord:
@@ -163,7 +176,7 @@ class CaldavProvider(CalendarProvider):
 
         if search_start is not None:
             results = cast(
-                list[CaldavEvent],
+                list[Any],
                 remote_calendar.remote.date_search(
                     start=search_start,
                     end=search_end,
@@ -171,7 +184,7 @@ class CaldavProvider(CalendarProvider):
                 ),
             )
         else:
-            results = cast(list[CaldavEvent], remote_calendar.remote.events())
+            results = cast(list[Any], remote_calendar.remote.events())
 
         matched: list[EventRecord] = []
         lowered = query.casefold()
@@ -209,7 +222,7 @@ class CaldavProvider(CalendarProvider):
         if self._calendar_cache is not None:
             return self._calendar_cache
 
-        remote_calendars = cast(list[CaldavCalendar], self._principal_client().calendars())
+        remote_calendars = cast(list[Any], self._principal_client().calendars())
         configured = self._account.calendars or []
 
         resolved: dict[str, ResolvedCalendar] = {}
@@ -262,8 +275,8 @@ class CaldavProvider(CalendarProvider):
     def _match_remote_calendar(
         self,
         configured_calendar: CalendarConfig,
-        remote_calendars: list[CaldavCalendar],
-    ) -> CaldavCalendar | None:
+        remote_calendars: list[Any],
+    ) -> Any | None:
         for remote in remote_calendars:
             remote_url = str(remote.url)
             if (
@@ -301,7 +314,7 @@ class CaldavProvider(CalendarProvider):
 
     def _client_instance(self) -> Any:
         if self._client is None:
-            self._client = DAVClient(
+            self._client = self._bindings.dav_client_class(
                 url=self._account.url,
                 username=self._account.username,
                 password=self._account.password,
@@ -309,15 +322,15 @@ class CaldavProvider(CalendarProvider):
             )
         return self._client
 
-    def _get_event(self, calendar: CaldavCalendar, event_uid: str) -> CaldavEvent:
+    def _get_event(self, calendar: Any, event_uid: str) -> Any:
         event = cast(Any, calendar).event_by_uid(event_uid)
         if event is None:
             raise EventNotFoundError(
                 f"event_uid '{event_uid}' was not found in calendar '{calendar.name}'"
             )
-        return cast(CaldavEvent, event)
+        return cast(Any, event)
 
-    def _event_to_record(self, calendar: CalendarSummary, event: CaldavEvent) -> EventRecord:
+    def _event_to_record(self, calendar: CalendarSummary, event: Any) -> EventRecord:
         component = event.get_icalendar_component()
         start = component.get("DTSTART")
         end = component.get("DTEND")

@@ -61,7 +61,10 @@ def main(
     """Run the MCP CalDAV server."""
     config = load_config(config_path)
     registry = AccountRegistry(config)
-    sessions = SessionManager(registry=registry, factory=CaldavProviderFactory())
+    sessions = SessionManager(
+        registry=registry,
+        factory=CaldavProviderFactory(config.provider),
+    )
     access = AccessController(config.access)
     http_config = config.http
     server = build_server(
