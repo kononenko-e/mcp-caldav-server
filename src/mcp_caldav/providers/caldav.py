@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any, cast
 from uuid import uuid4
 
-from icalendar import Alarm, Calendar, Event, vCalAddress, vCategory
+from icalendar import Alarm, Calendar, Event, Timezone, TimezoneDaylight, TimezoneStandard, vCalAddress, vCategory
 
 from mcp_caldav.config.models import AccountConfig, CalendarConfig, ProviderConfig
 from mcp_caldav.core.errors import (
@@ -121,6 +121,9 @@ class CaldavProvider(CalendarProvider):
             cal_alarm = self._build_alarm(reminder)
             event.add_component(cal_alarm)
 
+        # Add VTIMEZONE for iCloud compatibility
+        self._add_vtimezone(cal, start, end)
+
         remote_event = cast(Any, remote_calendar.remote.save_event(cal.to_ical()))
         return self._event_to_record(remote_calendar.summary, remote_event)
 
@@ -235,6 +238,52 @@ class CaldavProvider(CalendarProvider):
         alarm.add("description", reminder.description or "Reminder")
         alarm.add("trigger", reminder.to_trigger())
         return alarm
+
+    def _add_vtimezone(
+        self, cal: Calendar, *datetimes: datetime
+    ) -> None:
+        """Add VTIMEZONE component for any named (ZoneInfo) timezone found in the given datetimes.
+        
+        iCloud CalDAV requires a VTIMEZONE definition to display events in the correct
+        local time. Without it, events with fixed-offset timezones (e.g. +05:00) are
+        silently converted to UTC.
+        """
+        seen: set[str] = set()
+        for dt in datetimes:
+            tz = dt.tzinfo
+            if tz is None:
+                continue
+            tzid = getattr(tz, "key", None)
+            if tzid is None or tzid in seen or tzid == "UTC":
+                continue
+            seen.add(tzid)
+
+            now = datetime.now(tz)
+            utc_offset = now.utcoffset()
+            dst_offset = now.dst()
+            std_offset = utc_offset
+            if dst_offset:
+                std_offset = utc_offset - dst_offset
+
+            tz_component = Timezone()
+            tz_component.add("tzid", tzid)
+
+            standard = TimezoneStandard()
+            standard.add("dtstart", datetime(1970, 1, 1))
+            standard.add("tzoffsetfrom", std_offset or timedelta(0))
+            standard.add("tzoffsetto", std_offset or timedelta(0))
+            standard.add("tzname", tz.tzname(now) or "")
+            tz_component.add_component(standard)
+
+            if dst_offset:
+                daylight = TimezoneDaylight()
+                daylight.add("dtstart", datetime(1970, 6, 1))
+                daylight.add("tzoffsetfrom", std_offset or timedelta(0))
+                daylight.add("tzoffsetto", utc_offset or timedelta(0))
+                daylight.add("tzname", tz.tzname(now) or "")
+                tz_component.add_component(daylight)
+
+            cal.add_component(tz_component)
 
     def _resolve_calendar(self, calendar_id: str) -> ResolvedCalendar:
         calendars = self._load_calendars()
