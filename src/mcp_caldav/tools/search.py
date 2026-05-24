@@ -16,7 +16,10 @@ def register_search_tools(
 ) -> None:
     @server.tool(
         name="caldav_search_events",
-        description="Search event text fields inside one explicit calendar.",
+        description=(
+            "Search event text fields inside one explicit calendar. "
+            "Optional start/end narrow the time window; without them a +-1-year window around today is used."
+        ),
     )
     def search_events(
         account_id: str,

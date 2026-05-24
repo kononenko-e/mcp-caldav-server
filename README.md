@@ -56,6 +56,15 @@ Configuration rules:
 - If `calendars` is omitted, calendars are auto-discovered lazily.
 - `default_calendar_id` is optional and affects only response metadata.
 
+### Calendar matching rules
+
+When `calendars` is configured, each entry is matched against remote CalDAV calendars in this order:
+1. By `url` (exact match after stripping trailing slash) — takes priority.
+2. By `name` (exact string match).
+
+If neither matches, the calendar entry is silently skipped.
+Duplicate remote names across different servers may produce unexpected matches — use `url` for reliable identification.
+
 Optional shared HTTP section:
 
 ```yaml

@@ -26,22 +26,21 @@ mcp-caldav-server = "mcp_caldav.cli:main"
 requires = ["uv_build>=0.11.14,<0.12.0"]
 build-backend = "uv_build"
 
+[tool.uv.build-backend]
+source-dir = "src"
+module-name = "mcp_caldav"
+
 [dependency-groups]
 dev = [
     "mypy>=2.1.0",
     "pytest>=9.0.3",
+    "pytest-cov>=6.0.0",
     "ruff>=0.15.14",
 ]
 
-[tool.ruff]
-target-version = "py311"
-line-length = 100
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "N"]
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "--cov=mcp_caldav --cov-report=term-missing"
 
 [tool.mypy]
 python_version = "3.11"

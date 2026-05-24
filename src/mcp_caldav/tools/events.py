@@ -50,7 +50,7 @@ def register_event_tools(
 
     @server.tool(
         name="caldav_get_today_events",
-        description="List today's events for a calendar using the server local timezone.",
+        description="List today's events for a calendar. Time window is computed in UTC (00:00-23:59 UTC today).",
     )
     def get_today_events(account_id: str, calendar_id: str) -> dict[str, object]:
         payload = GetTodayEventsInput(account_id=account_id, calendar_id=calendar_id)
@@ -68,7 +68,7 @@ def register_event_tools(
 
     @server.tool(
         name="caldav_get_week_events",
-        description="List events for the next seven days using the server local timezone.",
+        description="List events for the next seven days. Window starts at 00:00 UTC today.",
     )
     def get_week_events(account_id: str, calendar_id: str) -> dict[str, object]:
         payload = GetWeekEventsInput(account_id=account_id, calendar_id=calendar_id)

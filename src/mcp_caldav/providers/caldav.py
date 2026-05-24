@@ -20,6 +20,12 @@ from mcp_caldav.schemas.tools import CreateEventInput, ReminderInput, UpdateEven
 from mcp_caldav.utils.ical import first_component, serialize_recurrence
 from mcp_caldav.utils.time import ensure_datetime, format_datetime
 
+import logging
+import time
+from datetime import UTC, datetime, timedelta
+
+logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True)
 class ResolvedCalendar:
@@ -42,6 +48,8 @@ class CaldavProviderFactory:
 
 
 class CaldavProvider(CalendarProvider):
+    _CALENDAR_CACHE_TTL: int = 300  # seconds
+
     def __init__(
         self,
         account_id: str,
@@ -54,6 +62,7 @@ class CaldavProvider(CalendarProvider):
         self._client: Any = None
         self._principal: Any = None
         self._calendar_cache: dict[str, ResolvedCalendar] | None = None
+        self._calendar_cache_ts: float = 0.0
 
     def list_calendars(self) -> list[CalendarSummary]:
         return [resolved.summary for resolved in self._load_calendars().values()]
@@ -192,7 +201,17 @@ class CaldavProvider(CalendarProvider):
                 ),
             )
         else:
-            results = cast(list[Any], remote_calendar.remote.events())
+            now = datetime.now(tz=UTC)
+            default_start = now - timedelta(days=365)
+            default_end = now + timedelta(days=365)
+            results = cast(
+                list[Any],
+                remote_calendar.remote.date_search(
+                    start=default_start,
+                    end=default_end,
+                    expand=True,
+                ),
+            )
 
         matched: list[EventRecord] = []
         lowered = query.casefold()
@@ -227,7 +246,11 @@ class CaldavProvider(CalendarProvider):
             ) from exc
 
     def _load_calendars(self) -> dict[str, ResolvedCalendar]:
-        if self._calendar_cache is not None:
+        _now = time.monotonic()
+        if (
+            self._calendar_cache is not None
+            and (_now - self._calendar_cache_ts) < self._CALENDAR_CACHE_TTL
+        ):
             return self._calendar_cache
 
         remote_calendars = cast(list[Any], self._principal_client().calendars())
@@ -278,6 +301,8 @@ class CaldavProvider(CalendarProvider):
                 next_index += 1
 
         self._calendar_cache = resolved
+        self._calendar_cache_ts = time.monotonic()
+        logger.debug("Loaded %d calendars for account '%s'", len(resolved), self._account_id)
         return resolved
 
     def _match_remote_calendar(
@@ -316,6 +341,7 @@ class CaldavProvider(CalendarProvider):
             self._principal = client.principal()
             return self._principal
         except Exception as exc:  # pragma: no cover - library-specific failure paths
+            logger.warning("Failed to connect account '%s': %s", self._account_id, exc)
             raise ProviderConnectionError(
                 f"failed to connect account '{self._account_id}' to CalDAV server: {exc}"
             ) from exc

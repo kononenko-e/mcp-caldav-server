@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from pathlib import Path
 
 import yaml  # type: ignore[import-untyped]
@@ -9,6 +11,8 @@ from pydantic import ValidationError
 from mcp_caldav.config.models import ServerConfig
 from mcp_caldav.config.validate import resolve_passwords
 from mcp_caldav.core.errors import ConfigError
+
+logger = logging.getLogger(__name__)
 
 
 def load_config(path: Path) -> ServerConfig:
@@ -28,4 +32,5 @@ def load_config(path: Path) -> ServerConfig:
     except ValidationError as exc:
         raise ConfigError(f"configuration validation failed: {exc}") from exc
 
+    logger.info("Loaded config from '%s' with %d account(s)", path, len(config.accounts))
     return resolve_passwords(config)
